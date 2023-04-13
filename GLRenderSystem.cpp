@@ -1,16 +1,31 @@
 #include "GLRenderSystem.h"
 
-GLRenderSystem::GLRenderSystem() {
+GLRenderSystem::GLRenderSystem(unsigned int p_width, unsigned int p_height) {
 	current_program = nullptr;
 	program_map = std::unordered_map<const char*, std::shared_ptr<GLProgram>>();
-	current_textures = std::unordered_map<GLenum, std::shared_ptr<GLTexture>>();
 	current_buffers = std::unordered_map<GLenum, std::shared_ptr<GLBuffer>>();
+	width = p_width;
+	height = p_height;
 }
 
-/*
-* Functions for Creating and Using OpenGL Shaders
-*/
+//OpenGL API Calls
+void GLRenderSystem::SetClearColor(GLfloat p_r, GLfloat p_g, GLfloat p_b, GLfloat p_a) {
+	if (clear_color.r == p_r && clear_color.g == p_g && clear_color.b == p_b && clear_color.a == p_a) {
+		return;
+	}
+	glClearColor(p_r, p_g, p_b, p_a);
+	clear_color = glm::vec4(p_r, p_g, p_b, p_a);
+}
 
+void GLRenderSystem::SetClearColor(const glm::vec4& p_color) {
+	if (clear_color == p_color) {
+		return;
+	}
+	glClearColor(p_color.r, p_color.g, p_color.b, p_color.a);
+	clear_color = p_color;
+}
+
+//Functions for Creating and Using OpenGL Shaders
 void GLRenderSystem::BindProgram(const char* p_program) {
 	if (p_program != current_program) {
 		if (program_map.find(p_program) == program_map.end()) {
@@ -86,7 +101,7 @@ void GLRenderSystem::SetProgramUniformMat4(const char* p_program_name, const GLc
 	return buffer;
 }
 
-void GLRenderSystem::BindBuffer(std::shared_ptr<GLBuffer> p_buffer) {
+void GLRenderSystem::BindBuffer(const std::shared_ptr<GLBuffer> p_buffer) {
 	GLenum type = p_buffer.get()->GetType();
 	if (current_buffers[type] != p_buffer) {
 		glBindBuffer(type, p_buffer.get()->GetHandle());
@@ -106,7 +121,7 @@ void GLRenderSystem::BindBuffer(std::shared_ptr<GLBuffer> p_buffer) {
 	return vertex_array;
 }
 
-void GLRenderSystem::BindVertexArray(std::shared_ptr<GLVertexArray> p_vertex_array) {
+void GLRenderSystem::BindVertexArray(const std::shared_ptr<GLVertexArray> p_vertex_array) {
 	if (current_vertex_array != p_vertex_array) {
 		current_vertex_array = p_vertex_array;
 		glBindVertexArray(p_vertex_array.get()->GetHandle());
@@ -125,10 +140,43 @@ void GLRenderSystem::UnBindVertexArray() {
 	return texture;
 }
 
-void GLRenderSystem::BindTexture(std::shared_ptr<GLTexture> p_texture) {
-	GLenum type = p_texture.get()->GetType();
-	if (current_textures[type] != p_texture) {
-		glBindTexture(type, p_texture.get()->GetHandle());
-		current_textures[type] = p_texture;
+void GLRenderSystem::BindTexture(unsigned int p_index, std::shared_ptr<GLTexture> p_texture) {
+	current_textures[p_index] = p_texture;
+	glActiveTexture(GL_TEXTURE0 + p_index);
+	glBindTexture(p_texture.get()->GetType(), p_texture.get()->GetHandle());
+	active_texture = GL_TEXTURE0 + p_index;
+}
+
+void GLRenderSystem::UnBindTexture(unsigned int p_index) {
+	current_textures[p_index]->GetType();
+}
+
+//Functions for FrameBuffer
+[[nodiscard]] std::shared_ptr<GLFrameBuffer> GLRenderSystem::CreateFrameBuffer(unsigned int p_width, unsigned int p_height, const std::vector<FrameBufferTexture>& p_textures) {
+	std::shared_ptr<GLFrameBuffer> frame_buffer = std::make_shared<GLFrameBuffer>(p_width, p_height, p_textures);
+	return frame_buffer;
+}
+
+void GLRenderSystem::BindFrameBuffer(const std::shared_ptr<GLFrameBuffer> p_frame_buffer) {
+	if (current_frame_buffer != p_frame_buffer) {
+		glViewport(0, 0, p_frame_buffer->GetWidth(), p_frame_buffer->GetHeight());
+		glBindFramebuffer(GL_FRAMEBUFFER, p_frame_buffer->GetHandle());
+	}
+}
+
+void GLRenderSystem::UnBindFrameBuffer() {
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glViewport(0, 0, width, height);
+	current_frame_buffer = NULL;
+}
+
+void GLRenderSystem::BindFrameBufferTextures(const std::shared_ptr<GLFrameBuffer> p_frame_buffer) {
+	int i = 0;
+	for (GLuint texture : p_frame_buffer->GetTextures()) {
+		GLenum target = GL_TEXTURE0 + i;
+		glActiveTexture(target);
+		active_texture = target;
+		glBindTexture(GL_TEXTURE_2D, texture);
+		++i;
 	}
 }
